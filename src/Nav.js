@@ -1,4 +1,6 @@
 import PropTypes from "prop-types";
+import { useRef } from "react";
+import { useKey } from "./useKey";
 
 export function Nav({ children }) {
   return (
@@ -22,6 +24,12 @@ Search.propTypes = {
 };
 
 export function Search({ query, onQuery }) {
+  const inputEl = useRef(null);
+
+  useKey("Escape", function () {
+    inputEl.current.focus();
+  });
+
   return (
     <input
       className="search"
@@ -29,6 +37,7 @@ export function Search({ query, onQuery }) {
       placeholder="Search movies..."
       value={query}
       onChange={(e) => onQuery(e.target.value)}
+      ref={inputEl}
     />
   );
 }

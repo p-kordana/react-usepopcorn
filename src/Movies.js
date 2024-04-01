@@ -7,6 +7,7 @@ export function MovieList({ movies, onSelect }) {
     </ul>
   );
 }
+
 function Movie({ movie, onSelect }) {
   return (
     <li onClick={() => onSelect(movie.imdbID)}>

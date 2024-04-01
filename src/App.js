@@ -1,54 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Nav, Search, SearchCount } from "./Nav";
 import StarRating from "./StarRating";
 import { MovieList } from "./Movies";
-
-// const tempMovieData = [
-//   {
-//     imdbID: "tt1375666",
-//     Title: "Inception",
-//     Year: "2010",
-//     Poster:
-//       "https://m.media-amazon.com/images/M/MV5BMjAxMzY3NjcxNF5BMl5BanBnXkFtZTcwNTI5OTM0Mw@@._V1_SX300.jpg",
-//   },
-//   {
-//     imdbID: "tt0133093",
-//     Title: "The Matrix",
-//     Year: "1999",
-//     Poster:
-//       "https://m.media-amazon.com/images/M/MV5BNzQzOTk3OTAtNDQ0Zi00ZTVkLWI0MTEtMDllZjNkYzNjNTc4L2ltYWdlXkEyXkFqcGdeQXVyNjU0OTQ0OTY@._V1_SX300.jpg",
-//   },
-//   {
-//     imdbID: "tt6751668",
-//     Title: "Parasite",
-//     Year: "2019",
-//     Poster:
-//       "https://m.media-amazon.com/images/M/MV5BYWZjMjk3ZTItODQ2ZC00NTY5LWE0ZDYtZTI3MjcwN2Q5NTVkXkEyXkFqcGdeQXVyODk4OTc3MTY@._V1_SX300.jpg",
-//   },
-// ];
-
-// const tempWatchedData = [
-//   {
-//     imdbID: "tt1375666",
-//     Title: "Inception",
-//     Year: "2010",
-//     Poster:
-//       "https://m.media-amazon.com/images/M/MV5BMjAxMzY3NjcxNF5BMl5BanBnXkFtZTcwNTI5OTM0Mw@@._V1_SX300.jpg",
-//     runtime: 148,
-//     imdbRating: 8.8,
-//     userRating: 10,
-//   },
-//   {
-//     imdbID: "tt0088763",
-//     Title: "Back to the Future",
-//     Year: "1985",
-//     Poster:
-//       "https://m.media-amazon.com/images/M/MV5BZmU0M2Y1OGUtZjIxNi00ZjBkLTg1MjgtOWIyNThiZWIwYjRiXkEyXkFqcGdeQXVyMTQxNzMzNDI@._V1_SX300.jpg",
-//     runtime: 116,
-//     imdbRating: 8.5,
-//     userRating: 9,
-//   },
-// ];
+import { useMovies } from "./useMovies";
+import { useLocalStorageState } from "./useLocalStorageState";
+import { useKey } from "./useKey";
 
 const average = (arr) =>
   arr.reduce((acc, cur, i, arr) => acc + cur / arr.length, 0);
@@ -58,12 +14,19 @@ const initQuery = "";
 
 export default function App() {
   const [query, setQuery] = useState(initQuery);
-  const [movies, setMovies] = useState([]);
-  const [selectedId, setSelectedId] = useState(null); //"tt0102690"
-  const [watched, setWatched] = useState([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [selectedId, setSelectedId] = useState(null);
+  // const { movies, isLoading, error } = useMovies(query, handleDeselect); // removed callback for now
+  const { movies, isLoading, error } = useMovies(query);
   const movieCount = movies.length;
+
+  const [watched, setWatched] = useLocalStorageState([], "watched");
+
+  useKey("Escape", handleEscape);
+
+  function handleEscape() {
+    handleDeselect();
+    setQuery("");
+  }
 
   function handleSelect(id) {
     setSelectedId((c) => (c === id ? null : id));
@@ -83,52 +46,6 @@ export default function App() {
   function handleRemoveWatched(idToRemove) {
     setWatched((c) => c.filter((m) => m.imdbID !== idToRemove));
   }
-
-  useEffect(
-    function () {
-      const controller = new AbortController();
-      async function fetchMovies() {
-        try {
-          setIsLoading(true);
-          setError("");
-          const res = await fetch(
-            `http://www.omdbapi.com/?&apikey=${KEY}&s=${query}`,
-            { signal: controller.signal }
-          );
-
-          if (!res.ok)
-            throw new Error("Something went wrong while grabbing movies.");
-
-          const data = await res.json();
-          if (data.Response === "False") throw new Error("Movie not found");
-
-          setMovies(data?.Search);
-          setError("");
-        } catch (err) {
-          if (err.name !== "AbortError") {
-            console.log(err.message);
-            setError(err.message);
-          }
-        } finally {
-          setIsLoading(false);
-        }
-      }
-
-      if (query.length < 3) {
-        setMovies([]);
-        setError("");
-        return;
-      }
-
-      handleDeselect();
-      fetchMovies();
-
-      return function () {
-        controller.abort();
-      };
-    },
-    [query]
-  );
 
   return (
     <>
@@ -245,6 +162,8 @@ function MovieDetail({ movieId, onClose, onAddWatched }) {
   const [error, setError] = useState("");
   const [userRating, setUserRating] = useState(0);
 
+  const countRef = useRef(0);
+
   const {
     Title: title,
     Year: year,
@@ -260,19 +179,14 @@ function MovieDetail({ movieId, onClose, onAddWatched }) {
 
   useEffect(
     function () {
-      function callBack(e) {
-        if (e.code === "Escape") {
-          onClose();
-          // console.log("Closing");
-        }
+      if (userRating) {
+        countRef.current++;
       }
-      document.addEventListener("keydown", callBack);
-      return function () {
-        document.removeEventListener("keydown", callBack);
-      };
     },
-    [onClose]
+    [userRating]
   );
+
+  useKey("Escape", onClose);
 
   useEffect(
     function () {
@@ -285,21 +199,6 @@ function MovieDetail({ movieId, onClose, onAddWatched }) {
     },
     [title]
   );
-
-  function handleAdd() {
-    const newWatchedMovie = {
-      imdbID: movieId,
-      title,
-      year,
-      poster,
-      imdbRating: Number(imdbRating),
-      runtime: Number(runtime.split(" ").at(0)),
-      userRating,
-    };
-
-    onAddWatched(newWatchedMovie);
-    onClose();
-  }
 
   useEffect(
     function () {
@@ -328,6 +227,22 @@ function MovieDetail({ movieId, onClose, onAddWatched }) {
     },
     [movieId]
   );
+
+  function handleAdd() {
+    const newWatchedMovie = {
+      imdbID: movieId,
+      title,
+      year,
+      poster,
+      imdbRating: Number(imdbRating),
+      runtime: Number(runtime.split(" ").at(0)),
+      userRating,
+      userRatingClicks: countRef.current,
+    };
+
+    onAddWatched(newWatchedMovie);
+    onClose();
+  }
 
   return (
     <>
